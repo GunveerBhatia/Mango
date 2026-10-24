@@ -3,7 +3,7 @@
 // ODDS_CACHE_MINUTES (default 60).
 
 import { cacheLife } from "next/cache";
-import { ODDS_CACHE_SECONDS } from "../cache-config";
+import { ODDS_CACHE_SECONDS, PROPS_CACHE_SECONDS } from "../cache-config";
 import { fetchJson } from "../http";
 import type { BookQuote } from "../markets";
 
@@ -108,18 +108,27 @@ export const PROP_MARKETS = {
   threes: "player_threes",
 } as const;
 
-export async function getEventProps(sport: string, eventId: string): Promise<OddsEvent> {
+/**
+ * Prop lines for one event. Costs one credit per market, so callers pick the
+ * markets: the player page asks for all five, the auto-picks scan may ask for fewer.
+ */
+export async function getEventProps(
+  sport: string,
+  eventId: string,
+  markets: string[] = Object.values(PROP_MARKETS),
+  scan = false,
+): Promise<OddsEvent & { remaining?: string }> {
   "use cache";
-  cacheLife({ stale: 60, revalidate: ODDS_CACHE_SECONDS, expire: ODDS_CACHE_SECONDS * 4 });
+  const life = scan ? PROPS_CACHE_SECONDS : ODDS_CACHE_SECONDS;
+  cacheLife({ stale: 60, revalidate: life, expire: life * 4 });
   const key = process.env.ODDS_API_KEY;
   if (!key) throw new Error("The Odds API: ODDS_API_KEY is not set");
   const regions = process.env.ODDS_REGIONS || "us";
-  const markets = Object.values(PROP_MARKETS).join(",");
   const url =
     `${BASE}/sports/${sport}/events/${eventId}/odds?regions=${encodeURIComponent(regions)}` +
-    `&markets=${markets}&oddsFormat=american&apiKey=${encodeURIComponent(key)}`;
-  const { data } = await fetchJson<OddsEvent>(url, "The Odds API (props)");
-  return data;
+    `&markets=${markets.join(",")}&oddsFormat=american&apiKey=${encodeURIComponent(key)}`;
+  const { data, headers } = await fetchJson<OddsEvent>(url, "The Odds API (props)");
+  return { ...data, remaining: headers.get("x-requests-remaining") ?? undefined };
 }
 
 const normName = (s: string) =>

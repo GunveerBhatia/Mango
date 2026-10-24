@@ -12,7 +12,7 @@ Slip shows **probabilities, not picks**. It never calls anything a "lock".
 - Each leg shows our win %; tap it to see **why**: the book's odds, our estimate, and the stats behind it.
 - **Add to slip** puts the whole parlay in your slip.
 - If nothing is worth betting, it says **No bet today** instead of forcing picks.
-- Player props are included when you set `ODDS_API_KEY` and `AUTO_PROPS=on` (this uses many credits; see below).
+- Player props are included when you set `ODDS_API_KEY` and `AUTO_PROPS=points` (points lines, fits the free plan) or `AUTO_PROPS=all` (all five stats, needs a paid plan). Scans refresh every 6 hours and pause automatically when you're under 50 credits.
 
 **Games (home)**
 - One card per game: tip-off in your local time, moneyline, spread, total.
@@ -109,7 +109,7 @@ Slip saves every API response and reuses it, so opening the app many times doesn
 | --- | --- | --- | --- |
 | ESPN public API | Schedule, records, injuries, fallback odds | Free, no key | 10 min (`ESPN_CACHE_MINUTES`) |
 | The Odds API | Odds from every book | 500 credits/month free; game odds cost 3 credits per refresh (3 markets × 1 region) | 60 min (`ODDS_CACHE_MINUTES`) |
-| The Odds API (props) | Player prop lines | 5 credits per game, fetched when you open a player (or for every game with `AUTO_PROPS=on`) | 60 min |
+| The Odds API (props) | Player prop lines | 5 credits per game when you open a player; for auto-picks, 1 credit per game (`AUTO_PROPS=points`) or 5 (`all`) | 60 min (player page), 6 h (auto-picks, `PROPS_CACHE_MINUTES`) |
 
 At 60 minutes you'd spend at most ~72 credits on a day you use the app non-stop, and much less in practice. The home page footer shows how many credits you have left. Raise `ODDS_CACHE_MINUTES` if you run low.
 

@@ -182,7 +182,9 @@ export function modelProp(games: PlayerGame[], stat: PropStat, line: number): Pr
   if (last.length < 5) return null;
   const vals = last.map((g) => statValue(g, stat));
   const mu = mean(vals);
-  const sd = Math.max(Math.sqrt(mean(vals.map((v) => (v - mu) ** 2))), 1, mu * 0.2);
+  // Ten games understate how much a player's output swings; NBA game-to-game
+  // variation runs ~35% of the average, so never assume less than that.
+  const sd = Math.max(Math.sqrt(mean(vals.map((v) => (v - mu) ** 2))), 1.5, mu * 0.35);
   const minAll = mean(last.map((g) => g.min));
   const min3 = mean(last.slice(-3).map((g) => g.min));
   const minutesFactor = minAll > 0 && min3 < minAll * 0.85 ? min3 / minAll : 1;

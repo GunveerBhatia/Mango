@@ -11,6 +11,7 @@ import { buildMarket } from "./markets";
 import { EDGE_THRESHOLD, PROP_SHORT, modelProp, propSample, type PropStat } from "./model";
 import { americanToDecimal, decimalToAmerican } from "./odds-math";
 import { getPlayerGames, seasonYearFor } from "./providers/espn";
+import { ODDS_MIN_CREDITS } from "./cache-config";
 import { getEventProps, hasOddsApiKey, PROP_MARKETS, propQuotes } from "./providers/odds-api";
 import { fromBet, legFromGameBet } from "./slip/legs";
 import type { Leg } from "./slip/types";
@@ -143,18 +144,29 @@ function gameCandidates(games: AssembledGame[]): PickLeg[] {
     );
 }
 
-/**
- * Player props for each game's stat leaders. Costs 5 Odds API credits per game,
- * so it only runs with AUTO_PROPS=on (see README).
- */
-async function propCandidates(leagueId: LeagueId, games: AssembledGame[]): Promise<PickLeg[]> {
+/** AUTO_PROPS: "points" scans points lines only (1 credit/game); "all" scans all five (5 credits/game). */
+export function autoPropsMode(): "off" | "points" | "all" {
+  const v = (process.env.AUTO_PROPS ?? "off").toLowerCase();
+  if (v === "points") return "points";
+  if (v === "all" || v === "on") return "all";
+  return "off";
+}
+
+/** Player props for each game's stat leaders (see AUTO_PROPS in the README). */
+async function propCandidates(
+  leagueId: LeagueId,
+  games: AssembledGame[],
+  stats: PropStat[],
+): Promise<PickLeg[]> {
   const league = getLeague(leagueId);
   const out: PickLeg[] = [];
   await Promise.all(
     games
       .filter((a) => a.game.status.state === "pre" && a.oddsEventId)
       .map(async (a) => {
-        const ev = await safe(() => getEventProps(league.oddsApiSport, a.oddsEventId!));
+        const ev = await safe(() =>
+          getEventProps(league.oddsApiSport, a.oddsEventId!, stats.map((st) => PROP_MARKETS[st]), true),
+        );
         if (!ev) return;
         const sides = [
           { team: a.game.away, opp: a.game.home },
@@ -170,7 +182,8 @@ async function propCandidates(leagueId: LeagueId, games: AssembledGame[]): Promi
               );
               const sample = propSample(logs.flatMap((l) => l ?? []), team.id, team.abbr);
               let best: PickLeg | undefined;
-              for (const [stat, mk] of Object.entries(PROP_MARKETS) as [PropStat, string][]) {
+              for (const stat of stats) {
+                const mk = PROP_MARKETS[stat];
                 const m = buildMarket("total", ["Over", "Under"], propQuotes(ev, mk, name));
                 const line = m?.sides[0].point;
                 if (!m || line === undefined) continue;
@@ -215,16 +228,27 @@ async function propCandidates(leagueId: LeagueId, games: AssembledGame[]): Promi
   return out;
 }
 
-export async function getTodaysPicks(games: AssembledGame[], leagueId: LeagueId = "nba"): Promise<TodaysPicks> {
+export async function getTodaysPicks(
+  games: AssembledGame[],
+  leagueId: LeagueId = "nba",
+  creditsRemaining?: string,
+): Promise<TodaysPicks> {
   const cands = gameCandidates(games);
+  const mode = autoPropsMode();
   let propsNote: string;
   if (!hasOddsApiKey()) {
-    propsNote = "Player props need sportsbook lines: add an ODDS_API_KEY and set AUTO_PROPS=on.";
-  } else if (process.env.AUTO_PROPS !== "on") {
-    propsNote = "Player props are off to save Odds API credits. Set AUTO_PROPS=on to include them.";
+    propsNote = "Player props need sportsbook lines: add an ODDS_API_KEY and set AUTO_PROPS=points.";
+  } else if (mode === "off") {
+    propsNote = "Player props are off to save Odds API credits. Set AUTO_PROPS=points to include them.";
+  } else if (creditsRemaining !== undefined && Number(creditsRemaining) < ODDS_MIN_CREDITS) {
+    propsNote = `Player props paused: only ${creditsRemaining} Odds API credits left this month.`;
   } else {
-    cands.push(...(await propCandidates(leagueId, games)));
-    propsNote = "Includes player props for each team's top scorers, rebounders and passers.";
+    const stats: PropStat[] = mode === "points" ? ["pts"] : ["pts", "reb", "ast", "pra", "threes"];
+    cands.push(...(await propCandidates(leagueId, games, stats)));
+    propsNote =
+      mode === "points"
+        ? "Includes points props for each team's top players."
+        : "Includes player props for each team's top scorers, rebounders and passers.";
   }
   return { parlays: buildParlays(cands), propsNote };
 }

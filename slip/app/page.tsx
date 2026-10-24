@@ -17,7 +17,7 @@ function formatDay(day: string) {
 async function Games() {
   await connection();
   const { day, games, notices, sources, oddsCreditsRemaining, assembled } = await getTodaysGames("nba");
-  const picks = await getTodaysPicks(assembled, "nba");
+  const picks = await getTodaysPicks(assembled, "nba", oddsCreditsRemaining);
 
   return (
     <>
