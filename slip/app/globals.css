@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* Slip is dark-only. One green for good, one red for bad, everything else gray. */
+:root {
+  --bg: #0a0a0b;
+  --card: #141416;
+  --raised: #1c1c1f;
+  --line: #26262a;
+  --fg: #f4f4f5;
+  --muted: #8d8d96;
+  --faint: #5c5c64;
+  --good: #22c55e;
+  --bad: #ef4444;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Popovers open as a bottom sheet — thumb-friendly on phones. */
+[popover].sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 32rem;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: var(--raised);
+  color: var(--fg);
+  padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+[popover].sheet::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
