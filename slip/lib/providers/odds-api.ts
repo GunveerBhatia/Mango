@@ -97,3 +97,60 @@ export function findEvent(
       Math.abs(Date.parse(e.commence_time) - t) < 12 * 3600_000,
   );
 }
+
+/* ---------- Player props (costs credits per event; fetched only on demand) ---------- */
+
+export const PROP_MARKETS = {
+  pts: "player_points",
+  reb: "player_rebounds",
+  ast: "player_assists",
+  pra: "player_points_rebounds_assists",
+  threes: "player_threes",
+} as const;
+
+export async function getEventProps(sport: string, eventId: string): Promise<OddsEvent> {
+  "use cache";
+  cacheLife({ stale: 60, revalidate: ODDS_CACHE_SECONDS, expire: ODDS_CACHE_SECONDS * 4 });
+  const key = process.env.ODDS_API_KEY;
+  if (!key) throw new Error("The Odds API: ODDS_API_KEY is not set");
+  const regions = process.env.ODDS_REGIONS || "us";
+  const markets = Object.values(PROP_MARKETS).join(",");
+  const url =
+    `${BASE}/sports/${sport}/events/${eventId}/odds?regions=${encodeURIComponent(regions)}` +
+    `&markets=${markets}&oddsFormat=american&apiKey=${encodeURIComponent(key)}`;
+  const { data } = await fetchJson<OddsEvent>(url, "The Odds API (props)");
+  return data;
+}
+
+const normName = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z ]/g, "")
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Per-book over/under quotes for one player and one prop market. */
+export function propQuotes(ev: OddsEvent, marketKey: string, playerName: string): BookQuote[] {
+  const target = normName(playerName);
+  const out: BookQuote[] = [];
+  for (const bm of ev.bookmakers ?? []) {
+    const m = bm.markets.find((x) => x.key === marketKey);
+    if (!m) continue;
+    const mine = m.outcomes.filter(
+      (o) => normName((o as OddsOutcome & { description?: string }).description ?? "") === target,
+    );
+    const over = mine.find((o) => o.name === "Over");
+    const under = mine.find((o) => o.name === "Under");
+    if (!over && !under) continue;
+    out.push({
+      book: bm.title,
+      bookKey: bm.key,
+      a: over ? { american: over.price, point: over.point } : undefined,
+      b: under ? { american: under.price, point: under.point } : undefined,
+    });
+  }
+  return out;
+}

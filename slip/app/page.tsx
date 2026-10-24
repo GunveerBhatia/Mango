@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { GameCard } from "@/components/game-card";
-import { getTodaysGames } from "@/lib/games";
+import { EdgeBanner } from "@/components/edge-banner";
+import { edgeBets, getTodaysGames } from "@/lib/games";
 
 function formatDay(day: string) {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
@@ -30,6 +31,8 @@ async function Games() {
         </ul>
       )}
 
+      <EdgeBanner edges={edgeBets(games)} anyUpcoming={games.some((g) => g.status.state === "pre")} />
+
       {games.length === 0 ? (
         <div className="rounded-2xl border border-line bg-card p-8 text-center">
           <p className="text-base font-semibold">No games today</p>
@@ -47,7 +50,8 @@ async function Games() {
         <p>
           Schedule &amp; records: {sources.schedule} · Odds: {sources.odds} · Injuries: {sources.injuries}
         </p>
-        <p>Win % is the vig-free probability implied by the odds. Tap any number for the math.</p>
+        <p>Win % is the vig-free probability implied by the odds. Tap it for the math. Tap a price to add it to your slip.</p>
+        <p>Edges: Slip&apos;s model (ESPN results, rest, injuries, ESPN BPI) blended with the market.</p>
         {oddsCreditsRemaining && <p>Odds API credits left this month: {oddsCreditsRemaining}</p>}
         <p>Probabilities, not promises. Bet only what you can afford to lose.</p>
       </footer>

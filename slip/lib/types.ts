@@ -73,6 +73,26 @@ export interface OddsSource {
   fetchedAt?: string;
 }
 
+export type BetKind = MarketKind | "prop";
+
+/** One bettable side with everything needed to judge it and add it to a slip. */
+export interface BetOption {
+  key: string;
+  kind: BetKind;
+  label: string;
+  price: Price;
+  /** Probability the price implies, vig included — what you actually pay. */
+  impliedProb: number;
+  /** Market's vig-free probability. */
+  fairProb?: number;
+  /** Slip's raw model probability, before blending with the market. */
+  modelProb?: number;
+  /** Blended estimate used for edges. */
+  estProb?: number;
+  /** estProb − impliedProb. */
+  edge?: number;
+}
+
 export interface Game {
   id: string;
   league: string;
@@ -86,6 +106,13 @@ export interface Game {
     total?: Market;
   };
   oddsSource?: OddsSource;
+  /** Keyed "moneyline:0", "spread:1", "total:0"… (0 = away/over). */
+  bets: Record<string, BetOption>;
+  /** ESPN BPI win probability for the home team, if published. */
+  bpiHomeWin?: number;
+  modelHomeWin?: number;
+  modelHomeMargin?: number;
+  modelTotal?: number;
 }
 
 export type InjuryStatus = "Out" | "Doubtful" | "Questionable" | "Day-To-Day" | "Probable" | string;
