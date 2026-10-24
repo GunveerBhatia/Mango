@@ -23,13 +23,15 @@ export interface PickLeg {
 }
 
 export interface PickParlay {
-  id: "value" | "safer";
+  id: "value" | "steady" | "boost" | "longshot";
   title: string;
   blurb: string;
   legs: PickLeg[];
   american: number;
   estHit: number;
   impliedHit: number;
+  /** Payout multiple, e.g. 41 for +4000. */
+  multiplier: number;
   /** Expected profit on a $10 stake, by our estimate. */
   ev10: number;
 }
@@ -40,7 +42,12 @@ export interface TodaysPicks {
   propsNote: string;
 }
 
-const SAFER_MIN_EDGE = 0.01;
+/** Expected return per $1 by our estimate: above 1 = value, below 1 = paying the book. */
+const valueRatio = (c: PickLeg) => c.estProb * americanToDecimal(c.leg.american);
+const dec = (c: PickLeg) => americanToDecimal(c.leg.american);
+/** Legs much worse than fair aren't worth including in any tier. */
+const MIN_VALUE_RATIO = 0.93;
+const MAX_LEGS = 4;
 
 function parlay(id: PickParlay["id"], title: string, blurb: string, legs: PickLeg[]): PickParlay {
   const dec = legs.reduce((p, l) => p * americanToDecimal(l.leg.american), 1);
@@ -51,43 +58,74 @@ function parlay(id: PickParlay["id"], title: string, blurb: string, legs: PickLe
     blurb,
     legs,
     american: decimalToAmerican(dec),
+    multiplier: dec,
     estHit,
     impliedHit: legs.reduce((p, l) => p * l.leg.impliedProb, 1),
     ev10: 10 * (estHit * dec - 1),
   };
 }
 
-/** Greedy: best-first, one leg per game, stop at `max` legs. */
-function pickDistinct(cands: PickLeg[], max: number, minHit = 0): PickLeg[] {
+/** Best-first, one leg per game, until the parlay pays `target`x or hits `max` legs. */
+function pickDistinct(cands: PickLeg[], max: number, opts: { minHit?: number; target?: number } = {}): PickLeg[] {
   const out: PickLeg[] = [];
   for (const c of cands) {
     if (out.length >= max) break;
+    if (opts.target && out.reduce((p, o) => p * dec(o), 1) >= opts.target) break;
     if (out.some((o) => o.leg.gameId === c.leg.gameId)) continue;
     const hit = out.reduce((p, o) => p * o.estProb, c.estProb);
-    if (out.length >= 2 && hit < minHit) continue;
+    if (out.length >= 2 && opts.minHit && hit < opts.minHit) continue;
     out.push(c);
   }
   return out;
 }
 
-export function buildParlays(cands: PickLeg[]): PickParlay[] {
+const payout = (legs: PickLeg[]) => legs.reduce((p, l) => p * dec(l), 1);
+
+/**
+ * Up to four parlays at different risk levels. Each tier picks the best-value
+ * legs (our estimate × payout) in its odds range, one per game.
+ */
+export function buildParlays(all: PickLeg[]): PickParlay[] {
   const out: PickParlay[] = [];
+  const add = (p: PickParlay) => {
+    const key = p.legs.map((l) => l.leg.id).sort().join("|");
+    if (!out.some((o) => o.legs.map((l) => l.leg.id).sort().join("|") === key)) out.push(p);
+  };
+  const byValue = [...all].filter((c) => valueRatio(c) >= MIN_VALUE_RATIO).sort((a, b) => valueRatio(b) - valueRatio(a));
+
+  // Value: only when bets genuinely beat their price by 3%+.
   const value = pickDistinct(
-    cands.filter((c) => c.edge >= EDGE_THRESHOLD).sort((a, b) => b.edge - a.edge),
+    all.filter((c) => c.edge >= EDGE_THRESHOLD).sort((a, b) => b.edge - a.edge),
     3,
-    0.25,
+    { minHit: 0.25 },
   );
-  if (value.length >= 2) {
-    out.push(parlay("value", "Best value", "The legs our model rates highest against their price.", value));
-  }
-  const safer = pickDistinct(
-    cands.filter((c) => c.edge >= SAFER_MIN_EDGE).sort((a, b) => b.estProb - a.estProb),
+  if (value.length >= 2) add(parlay("value", "Best value", "Every leg beats its price by 3%+ by our estimate.", value));
+
+  // Steady: two likely legs, ~2–3x.
+  const steady = pickDistinct(
+    byValue.filter((c) => dec(c) <= 2.1 && c.estProb >= 0.5).sort((a, b) => b.estProb + valueRatio(b) - (a.estProb + valueRatio(a))),
     2,
   );
-  const same = value.length === safer.length && safer.every((s) => value.some((v) => v.leg.id === s.leg.id));
-  if (safer.length === 2 && !same) {
-    out.push(parlay("safer", "Higher hit chance", "The most likely legs where our estimate still beats the price.", safer));
-  }
+  if (steady.length === 2) add(parlay("steady", "Steady", "Two likely legs. Small payout, best chance to cash.", steady));
+
+  // Boost: ~5–10x from three solid legs.
+  const boost = pickDistinct(byValue.filter((c) => dec(c) >= 1.8 && dec(c) <= 3.5), 3, { target: 7 });
+  if (boost.length >= 3 && payout(boost) >= 5) add(parlay("boost", "Boost", "A bigger payout from three solid legs.", boost));
+
+  // Long shot: ~20–40x. Leans on underdogs (+120 and up) our model rates fairly,
+  // topped up with other solid legs if there aren't enough.
+  const dogs = pickDistinct(byValue.filter((c) => dec(c) >= 2.2 && dec(c) <= 6), MAX_LEGS, { target: 30 });
+  const longshot =
+    payout(dogs) >= 30 || dogs.length >= MAX_LEGS
+      ? dogs
+      : pickDistinct(
+          [...dogs, ...byValue.filter((c) => dec(c) >= 1.85 && dec(c) < 2.2)],
+          MAX_LEGS,
+          { target: 30 },
+        );
+  if (longshot.length >= 3 && payout(longshot) >= 15)
+    add(parlay("longshot", "Long shot", "Big payout, rarely hits. Fun money only.", longshot));
+
   return out;
 }
 
@@ -97,8 +135,10 @@ function gameCandidates(games: AssembledGame[]): PickLeg[] {
     .flatMap((a) =>
       Object.entries(a.game.bets).flatMap(([key, bet]) => {
         const leg = legFromGameBet(a.game, key);
-        if (!leg || bet.estProb === undefined || bet.edge === undefined) return [];
-        return [{ leg, why: bet.why ?? [], edge: bet.edge, estProb: bet.estProb }];
+        // No model yet (too few games): fall back to the market's vig-free odds.
+        const est = bet.estProb ?? bet.fairProb;
+        if (!leg || est === undefined) return [];
+        return [{ leg, why: bet.why ?? [], edge: est - bet.impliedProb, estProb: est }];
       }),
     );
 }

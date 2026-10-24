@@ -18,10 +18,12 @@ interface State {
   openedAt?: number;
   /** Last message shown at the top of the slip (e.g. leg cap reached). */
   flash?: string;
+  /** What's typed in the stake box. */
+  stakeText: string;
 }
 
 const KEY = "slip.v1";
-const EMPTY: State = { ready: false, legs: [], saved: [], settings: DEFAULT_SETTINGS, open: false };
+const EMPTY: State = { ready: false, legs: [], saved: [], settings: DEFAULT_SETTINGS, open: false, stakeText: "" };
 
 let state: State = EMPTY;
 let loaded = false;
@@ -99,9 +101,26 @@ export const slipActions = {
     }
     set({ legs: [...state.legs, leg], flash: undefined });
   },
-  /** Replace the slip with a suggested parlay and open it. */
-  replace(legs: Leg[]) {
-    set({ legs: legs.slice(0, state.settings.maxLegs), open: true, openedAt: Date.now(), flash: undefined });
+  /** Replace the slip with a suggested parlay (and its suggested stake) and open it. */
+  replace(legs: Leg[], stake?: number) {
+    if (legs.length > state.settings.maxLegs) {
+      set({
+        open: true,
+        openedAt: Date.now(),
+        flash: `This pick has ${legs.length} legs but your max is ${state.settings.maxLegs}. Raise it in My Record → Settings to use it.`,
+      });
+      return;
+    }
+    set({
+      legs,
+      open: true,
+      openedAt: Date.now(),
+      flash: undefined,
+      stakeText: stake ? String(stake) : state.stakeText,
+    });
+  },
+  setStake(text: string) {
+    set({ stakeText: text });
   },
   remove(id: string) {
     set({ legs: state.legs.filter((l) => l.id !== id), flash: undefined });
@@ -124,7 +143,7 @@ export const slipActions = {
       bankrollAtSave: s.bankroll,
       unitSize: s.bankroll ? s.bankroll / 100 : undefined,
     };
-    set({ saved: [slip, ...state.saved], legs: [], open: false, flash: undefined });
+    set({ saved: [slip, ...state.saved], legs: [], open: false, flash: undefined, stakeText: "" });
   },
   updateLeg(slipId: string, legId: string, patch: Partial<SavedLeg>) {
     set({

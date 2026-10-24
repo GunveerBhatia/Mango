@@ -54,15 +54,34 @@ export interface StakeAdvice {
   reason: string;
 }
 
+/**
+ * The most to put on a bet given how likely it is to hit: 5% of bankroll × hit chance.
+ * A 50% bet gets up to 2.5%; a 2.5% long shot (~40x) gets ~0.13%, e.g. $1.25 of $1,000.
+ * Rounded to $0.50, at least $1.
+ */
+export function riskStake(bankroll: number, hitProb: number): number {
+  const raw = bankroll * MAX_STAKE_PCT * Math.max(0, Math.min(1, hitProb));
+  return Math.min(round2(bankroll * MAX_STAKE_PCT), Math.max(1, Math.round(raw * 2) / 2));
+}
+
+export function riskLabel(hitProb: number): string {
+  if (hitProb >= 0.35) return "Lower risk";
+  if (hitProb >= 0.12) return "Medium risk";
+  return "Long shot";
+}
+
 export function stakeAdvice(settings: Settings, legs: Leg[]): StakeAdvice | null {
   const bankroll = settings.bankroll;
   if (!bankroll || bankroll <= 0) return null;
   const max = round2(bankroll * MAX_STAKE_PCT);
+  const { decimal, estHit } = slipNumbers(legs);
+  const cap = riskStake(bankroll, estHit);
+  const hit = `${Math.round(estHit * 100)}% to hit`;
   if (settings.stakeMode === "flat") {
     const s = round2((bankroll * settings.flatPct) / 100);
+    if (cap < s) return { suggested: cap, max, reason: `${riskLabel(estHit).toLowerCase()} (${hit}), so keep it small` };
     return { suggested: Math.min(s, max), max, reason: `${settings.flatPct}% of your $${fmt(bankroll)} bankroll` };
   }
-  const { decimal, estHit } = slipNumbers(legs);
   const b = decimal - 1;
   const full = b > 0 ? (b * estHit - (1 - estHit)) / b : 0;
   if (full <= 0) {

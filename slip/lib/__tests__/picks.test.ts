@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { impliedProbability } from "../odds-math";
 import { buildParlays, type PickLeg } from "../picks";
+import { riskStake } from "../slip/math";
 
-const c = (gameId: string, edge: number, estProb: number, american = -110): PickLeg => ({
+const c = (gameId: string, american: number, estProb: number): PickLeg => ({
   leg: {
-    id: `${gameId}:${edge}:${estProb}`,
-    kind: "spread",
+    id: `${gameId}:${american}`,
+    kind: "moneyline",
     league: "nba",
     gameId,
     startTime: "",
@@ -13,25 +15,56 @@ const c = (gameId: string, edge: number, estProb: number, american = -110): Pick
     side: 0,
     american,
     book: "DK",
-    impliedProb: 0.524,
+    impliedProb: impliedProbability(american),
   },
   why: [],
-  edge,
+  edge: estProb - impliedProbability(american),
   estProb,
 });
 
+// A normal night: no big edges, a mix of favorites and dogs priced near fair.
+const night = [
+  c("1", -200, 0.66), c("1", 170, 0.36),
+  c("2", -150, 0.59), c("2", 130, 0.42),
+  c("3", -110, 0.51), c("3", 120, 0.45),
+  c("4", 150, 0.39), c("4", -170, 0.61),
+  c("5", 200, 0.33), c("5", -240, 0.69),
+];
+
 describe("auto parlays", () => {
-  it("builds a value parlay from 3%+ edges, one leg per game", () => {
-    const [value] = buildParlays([c("1", 0.06, 0.58), c("1", 0.05, 0.57), c("2", 0.04, 0.56), c("3", 0.01, 0.6)]);
-    expect(value.id).toBe("value");
-    expect(value.legs.map((l) => l.leg.gameId)).toEqual(["1", "2"]);
+  const ps = buildParlays(night);
+  const byId = Object.fromEntries(ps.map((p) => [p.id, p]));
+
+  it("still offers parlays on a night with no 3% edges", () => {
+    expect(byId.value).toBeUndefined();
+    expect(byId.steady).toBeDefined();
+    expect(byId.longshot).toBeDefined();
   });
-  it("never uses legs our estimate rates worse than the price", () => {
-    expect(buildParlays([c("1", -0.02, 0.8), c("2", 0, 0.75)])).toEqual([]);
+  it("uses one leg per game and at most 4 legs", () => {
+    for (const p of ps) {
+      expect(new Set(p.legs.map((l) => l.leg.gameId)).size).toBe(p.legs.length);
+      expect(p.legs.length).toBeLessThanOrEqual(4);
+    }
   });
-  it("builds a higher-hit parlay from the likeliest positive legs", () => {
-    const ps = buildParlays([c("1", 0.015, 0.7, -250), c("2", 0.02, 0.68, -220), c("3", 0.04, 0.55)]);
-    expect(ps.map((p) => p.id)).toEqual(["safer"]);
-    expect(ps[0].legs.map((l) => l.leg.gameId)).toEqual(["1", "2"]);
+  it("orders risk: steady pays least and hits most, long shot pays 15x+", () => {
+    expect(byId.steady.multiplier).toBeLessThan(4);
+    expect(byId.longshot.multiplier).toBeGreaterThanOrEqual(15);
+    expect(byId.steady.estHit).toBeGreaterThan(byId.longshot.estHit);
+  });
+  it("builds a value parlay only from real edges", () => {
+    const v = buildParlays([c("1", -110, 0.58), c("2", -110, 0.57), c("3", -110, 0.5)]).find((p) => p.id === "value")!;
+    expect(v.legs.map((l) => l.leg.gameId)).toEqual(["1", "2"]);
+  });
+  it("skips legs that are much worse than fair", () => {
+    expect(buildParlays([c("1", -300, 0.6), c("2", -300, 0.6)])).toEqual([]);
   });
 });
+
+describe("risk-sized stakes", () => {
+  it("bets less the less likely it hits", () => {
+    expect(riskStake(1000, 0.5)).toBe(25);
+    expect(riskStake(1000, 0.025)).toBe(1.5);
+    expect(riskStake(100, 0.01)).toBe(1);
+  });
+});
+

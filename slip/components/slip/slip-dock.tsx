@@ -9,8 +9,8 @@ import { MAX_STAKE_PCT } from "@/lib/slip/types";
 
 /** The bar above the nav and the slip that slides up from it (PrizePicks-style). */
 export function SlipDock() {
-  const { legs, open, settings, flash, openedAt } = useSlip();
-  const [stakeText, setStakeText] = useState("");
+  const { legs, open, settings, flash, openedAt, stakeText } = useSlip();
+  const setStakeText = slipActions.setStake;
   const [saved, setSaved] = useState(false);
 
   const n = slipNumbers(legs);
@@ -176,7 +176,6 @@ export function SlipDock() {
               disabled={stake <= 0 || overMax}
               onClick={() => {
                 slipActions.save(stake);
-                setStakeText("");
                 setSaved(true);
                 setTimeout(() => setSaved(false), 4000);
               }}
