@@ -91,6 +91,8 @@ export interface BetOption {
   estProb?: number;
   /** estProb − impliedProb. */
   edge?: number;
+  /** Plain-English reasons behind the estimate, for "Why?" sheets. */
+  why?: string[];
 }
 
 export interface Game {

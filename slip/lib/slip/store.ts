@@ -99,6 +99,10 @@ export const slipActions = {
     }
     set({ legs: [...state.legs, leg], flash: undefined });
   },
+  /** Replace the slip with a suggested parlay and open it. */
+  replace(legs: Leg[]) {
+    set({ legs: legs.slice(0, state.settings.maxLegs), open: true, openedAt: Date.now(), flash: undefined });
+  },
   remove(id: string) {
     set({ legs: state.legs.filter((l) => l.id !== id), flash: undefined });
   },

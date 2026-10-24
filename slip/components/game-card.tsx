@@ -121,12 +121,15 @@ function TeamRow({ game, team, idx }: { game: Game; team: TeamSide; idx: 0 | 1 }
             <Link href={`/game/${game.id}`} className="text-base font-semibold">
               {team.abbr}
             </Link>
-            {team.record && <span className="text-xs tabular-nums text-muted">{team.record}</span>}
-            {showScore && <span className="ml-auto text-base font-semibold tabular-nums">{team.score}</span>}
+            {team.record && <span className="whitespace-nowrap text-xs tabular-nums text-muted">{team.record}</span>}
           </div>
         </div>
       </div>
-      <WinPct game={game} idx={idx} />
+      {showScore ? (
+        <span className="text-right text-xl font-semibold tabular-nums">{team.score}</span>
+      ) : (
+        <WinPct game={game} idx={idx} />
+      )}
       <Price game={game} betKey={`moneyline:${idx}`} main={formatAmerican(ml?.best.american)} />
       <Price
         game={game}
@@ -159,7 +162,7 @@ export function GameCard({ game }: { game: Game }) {
         <span className={`text-sm normal-case tracking-normal ${live ? "text-good" : game.status.state === "post" ? "text-muted" : "text-fg"}`}>
           {game.status.state === "pre" ? <LocalTime iso={game.startTime} /> : game.status.detail}
         </span>
-        <span className="text-right">Win %</span>
+        <span className="text-right">{game.status.state === "pre" ? "Win %" : "Score"}</span>
         <span className="text-center">ML</span>
         <span className="text-center">Spread</span>
       </header>

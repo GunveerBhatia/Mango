@@ -374,6 +374,9 @@ export async function getAthlete(espnPath: string, id: string): Promise<Athlete>
 export interface PlayerGame {
   eventId: string;
   date: string;
+  /** Team the player was on for this game (matters after trades). */
+  teamId: string;
+  teamAbbr: string;
   home: boolean;
   opponentId: string;
   opponentAbbr: string;
@@ -419,11 +422,17 @@ export async function getPlayerGames(
         const n = Number(String(st[i] ?? "").split("-")[0]);
         return Number.isFinite(n) ? n : 0;
       };
+      const opponentId = String(ev.opponent?.id ?? "");
+      const teamId = String(
+        ev.team?.id ?? (String(ev.homeTeamId) === opponentId ? ev.awayTeamId : ev.homeTeamId) ?? "",
+      );
       rows.push({
         eventId: String(row.eventId),
         date: ev.gameDate,
+        teamId,
+        teamAbbr: ev.team?.abbreviation ?? "",
         home: ev.atVs === "vs",
-        opponentId: String(ev.opponent?.id ?? ""),
+        opponentId,
         opponentAbbr: ev.opponent?.abbreviation ?? "?",
         result: ev.gameResult,
         min: num(iMin),

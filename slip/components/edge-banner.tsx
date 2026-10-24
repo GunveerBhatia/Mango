@@ -1,10 +1,5 @@
-import Link from "next/link";
-import { BetButton } from "./slip/bet-button";
 import { Sheet } from "./sheet";
 import { EDGE_THRESHOLD, MODEL_WEIGHT } from "@/lib/model";
-import { formatAmerican, formatPct } from "@/lib/odds-math";
-import { legFromGameBet } from "@/lib/slip/legs";
-import type { BetOption, Game } from "@/lib/types";
 
 export function HowEdgesWork({ id }: { id: string }) {
   return (
@@ -30,54 +25,5 @@ export function HowEdgesWork({ id }: { id: string }) {
         </p>
       </div>
     </Sheet>
-  );
-}
-
-export function EdgeBanner({ edges, anyUpcoming }: { edges: { game: Game; bet: BetOption }[]; anyUpcoming: boolean }) {
-  if (!anyUpcoming) return null;
-  if (edges.length === 0) {
-    return (
-      <section className="mb-4 rounded-2xl border border-line bg-card p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xl font-semibold">No bet today</p>
-            <p className="mt-1 text-sm text-muted">
-              No bet beats the book by {EDGE_THRESHOLD * 100}% or more. Skipping days like this protects your bankroll.
-            </p>
-          </div>
-          <HowEdgesWork id="how-edge-none" />
-        </div>
-      </section>
-    );
-  }
-  return (
-    <section className="mb-4 rounded-2xl border border-good/30 bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="font-semibold">
-          {edges.length} {edges.length === 1 ? "bet clears" : "bets clear"} the {EDGE_THRESHOLD * 100}% edge bar
-        </p>
-        <HowEdgesWork id="how-edge-some" />
-      </div>
-      <ul className="space-y-2">
-        {edges.slice(0, 5).map(({ game, bet }) => {
-          const key = bet.key.split(":").slice(1).join(":");
-          return (
-            <li key={bet.key} className="grid grid-cols-[1fr_5.5rem] items-center gap-3">
-              <Link href={`/game/${game.id}`} className="min-w-0">
-                <p className="truncate font-medium">{bet.label}</p>
-                <p className="truncate text-xs text-muted">
-                  {game.away.abbr} @ {game.home.abbr} · est. {formatPct(bet.estProb)} vs book {formatPct(bet.impliedProb)}
-                </p>
-              </Link>
-              <BetButton
-                leg={legFromGameBet(game, key)}
-                main={formatAmerican(bet.price.american)}
-                edge={bet.edge}
-              />
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }

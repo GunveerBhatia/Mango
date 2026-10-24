@@ -6,6 +6,14 @@ Slip shows **probabilities, not picks**. It never calls anything a "lock".
 
 ## What's in it
 
+**Picks for you (top of home)**
+- Slip builds up to two parlays for you: **Best value** (legs that beat their price by 3%+) and **Higher hit chance** (the likeliest legs where our estimate still beats the price).
+- One leg per game, so legs don't rise and fall together. 2–3 legs.
+- Each leg shows our win %; tap it to see **why**: the book's odds, our estimate, and the stats behind it.
+- **Add to slip** puts the whole parlay in your slip.
+- If nothing is worth betting, it says **No bet today** instead of forcing picks.
+- Player props are included when you set `ODDS_API_KEY` and `AUTO_PROPS=on` (this uses many credits; see below).
+
 **Games (home)**
 - One card per game: tip-off in your local time, moneyline, spread, total.
 - **Win %**: the vig-free probability implied by the odds. Tap it to see the math.
@@ -22,6 +30,7 @@ Slip shows **probabilities, not picks**. It never calls anything a "lock".
 **Props**
 - Search any player playing today, then pick PTS / REB / AST / PRA / 3PM.
 - Sportsbook line (with an Odds API key) or your own line, last 10 games as a bar chart with the line drawn across, hit rates (last 10, vs. tonight's opponent, home/away), and a minutes trend that turns red when minutes are dropping.
+- **Trades are handled**: once a player has 5+ games with his new team, only those count. Before that, older games are included but faded, with a note. "vs opponent" only counts games with his current team.
 
 **Parlay builder**
 - Tap any price to add it to the slip. Tap the bar above the menu to open it.
@@ -100,7 +109,7 @@ Slip saves every API response and reuses it, so opening the app many times doesn
 | --- | --- | --- | --- |
 | ESPN public API | Schedule, records, injuries, fallback odds | Free, no key | 10 min (`ESPN_CACHE_MINUTES`) |
 | The Odds API | Odds from every book | 500 credits/month free; game odds cost 3 credits per refresh (3 markets × 1 region) | 60 min (`ODDS_CACHE_MINUTES`) |
-| The Odds API (props) | Player prop lines | 5 credits per game, only fetched when you open a player | 60 min |
+| The Odds API (props) | Player prop lines | 5 credits per game, fetched when you open a player (or for every game with `AUTO_PROPS=on`) | 60 min |
 
 At 60 minutes you'd spend at most ~72 credits on a day you use the app non-stop, and much less in practice. The home page footer shows how many credits you have left. Raise `ODDS_CACHE_MINUTES` if you run low.
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EDGE_THRESHOLD, PROP_LABELS, PROP_SHORT, blend, modelProp, statValue, type PropStat } from "@/lib/model";
+import { EDGE_THRESHOLD, PROP_LABELS, PROP_SHORT, blend, modelProp, propSample, statValue, type PropStat } from "@/lib/model";
 import { formatAmerican, formatPct, impliedProbability, parseAmerican } from "@/lib/odds-math";
 import type { PlayerPropsData } from "@/lib/props";
 import type { Leg } from "@/lib/slip/types";
@@ -10,7 +10,18 @@ import { BetButton } from "../slip/bet-button";
 const STATS: PropStat[] = ["pts", "reb", "ast", "pra", "threes"];
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
-function BarChart({ values, labels, line }: { values: number[]; labels: string[]; line?: number }) {
+function BarChart({
+  values,
+  labels,
+  line,
+  faded = [],
+}: {
+  values: number[];
+  labels: string[];
+  line?: number;
+  /** Bars to dim, e.g. games with a previous team. */
+  faded?: boolean[];
+}) {
   if (values.length === 0) return <p className="py-8 text-center text-sm text-faint">No data yet</p>;
   const w = 340;
   const h = 150;
@@ -26,7 +37,7 @@ function BarChart({ values, labels, line }: { values: number[]; labels: string[]
         const color = line === undefined ? "var(--muted)" : over ? "var(--good)" : "var(--bad)";
         return (
           <g key={i}>
-            <rect x={i * bw + bw * 0.18} y={y(v)} width={bw * 0.64} height={Math.max(1, h - bottom - y(v))} rx={4} fill={color} opacity={0.85} />
+            <rect x={i * bw + bw * 0.18} y={y(v)} width={bw * 0.64} height={Math.max(1, h - bottom - y(v))} rx={4} fill={color} opacity={faded[i] ? 0.3 : 0.85} />
             <text x={i * bw + bw / 2} y={y(v) - 5} textAnchor="middle" fontSize={11} fill="var(--fg)" fontWeight={600}>
               {v}
             </text>
@@ -76,18 +87,22 @@ export function PropView({ data, initialStat }: { data: PlayerPropsData; initial
   const usingBook = line !== undefined && line === bookLine && market !== undefined;
 
   const g = data.game;
-  const last10 = data.games.slice(-10);
+  const sample = propSample(data.games, data.athlete.teamId, data.athlete.teamAbbr);
+  const last10 = sample.games.slice(-10);
   const vals = last10.map((x) => statValue(x, stat));
   const hits = (gs: typeof data.games) => (line === undefined ? 0 : gs.filter((x) => statValue(x, stat) > line).length);
-  const vsOpp = g ? data.games.filter((x) => x.opponentId === g.opponentId) : [];
-  const venue = g ? data.games.filter((x) => x.home === g.home).slice(-10) : [];
+  const current = (x: (typeof data.games)[number]) => !data.athlete.teamId || x.teamId === data.athlete.teamId;
+  // Matchup history only counts with his current team; an old team's games vs this opponent say little.
+  const vsOpp = g ? data.games.filter((x) => x.opponentId === g.opponentId && current(x)) : [];
+  const vsOppOld = g ? data.games.filter((x) => x.opponentId === g.opponentId && !current(x)) : [];
+  const venue = g ? sample.games.filter((x) => x.home === g.home).slice(-10) : [];
 
   const minutes = last10.map((x) => x.min);
   const min3 = mean(minutes.slice(-3));
   const min10 = mean(minutes);
   const dropping = minutes.length >= 5 && min3 < min10 * 0.85;
 
-  const model = line !== undefined ? modelProp(data.games, stat, line) : null;
+  const model = line !== undefined ? modelProp(sample.games, stat, line) : null;
 
   function sideOption(idx: 0 | 1) {
     if (line === undefined || !g || g.started) return { leg: undefined as Leg | undefined, edge: undefined as number | undefined, price: undefined as number | undefined };
@@ -141,6 +156,13 @@ export function PropView({ data, initialStat }: { data: PlayerPropsData; initial
           </button>
         ))}
       </div>
+
+      {sample.note && (
+        <p className="mb-4 rounded-2xl border border-line bg-card p-3 text-sm text-muted">
+          <span className="font-medium text-fg">Traded. </span>
+          {sample.note}
+        </p>
+      )}
 
       <section className="mb-4 rounded-2xl border border-line bg-card p-4">
         <div className="flex items-end justify-between gap-3">
@@ -199,14 +221,32 @@ export function PropView({ data, initialStat }: { data: PlayerPropsData; initial
         <p className="mb-3 text-sm text-muted">
           {line !== undefined && vals.length > 0 ? `Over in ${hits(last10)} of last ${last10.length}` : "Set a line to see hits"}
         </p>
-        <BarChart values={vals} labels={last10.map((x) => `${x.home ? "" : "@"}${x.opponentAbbr}`)} line={line} />
+        <BarChart
+          values={vals}
+          labels={last10.map((x) => `${x.home ? "" : "@"}${x.opponentAbbr}`)}
+          line={line}
+          faded={last10.map((x) => !current(x))}
+        />
+        {last10.some((x) => !current(x)) && (
+          <p className="mt-1 text-[11px] text-faint">Faded bars: games with his previous team.</p>
+        )}
       </section>
 
       <div className="mb-4 grid grid-cols-3 gap-2">
         <HitRate label="Last 10" hits={hits(last10)} total={line === undefined ? 0 : last10.length} />
-        <HitRate label={g ? `vs ${g.opponentAbbr}` : "vs opponent"} hits={hits(vsOpp)} total={line === undefined ? 0 : vsOpp.length} />
+        <HitRate
+          label={g ? `vs ${g.opponentAbbr}${vsOppOld.length ? ` (${data.athlete.teamAbbr})` : ""}` : "vs opponent"}
+          hits={hits(vsOpp)}
+          total={line === undefined ? 0 : vsOpp.length}
+        />
         <HitRate label={g ? (g.home ? "Home" : "Away") : "Venue"} hits={hits(venue)} total={line === undefined ? 0 : venue.length} />
       </div>
+
+      {line !== undefined && vsOppOld.length > 0 && g && (
+        <p className="-mt-2 mb-4 px-1 text-[11px] text-faint">
+          Left out: {hits(vsOppOld)}/{vsOppOld.length} over vs {g.opponentAbbr} with his old team.
+        </p>
+      )}
 
       <section className="mb-4 rounded-2xl border border-line bg-card p-4">
         <div className="flex items-center justify-between">

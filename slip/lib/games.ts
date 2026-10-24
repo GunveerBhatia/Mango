@@ -5,7 +5,8 @@ import { safe } from "./http";
 import { getLeague, type LeagueConfig, type LeagueId } from "./leagues";
 import { buildMarket, type BookQuote } from "./markets";
 import { EDGE_THRESHOLD, modelGame, type GameModel } from "./model";
-import { getScoreboard, getSummary, type EspnGame } from "./providers/espn";
+import { explainGameBets } from "./explain";
+import { getScoreboard, getSummary, seasonYearFor, type EspnGame } from "./providers/espn";
 import { getInjuries, INJURY_SOURCE } from "./providers/injuries";
 import { findEvent, getOddsFeed, hasOddsApiKey, quotesForEvent, type OddsFeed } from "./providers/odds-api";
 import { getTeamOutlook, type TeamOutlook } from "./team-context";
@@ -18,6 +19,8 @@ export interface GamesResult {
   /** Plain-English notes about missing or degraded data. */
   notices: string[];
   oddsCreditsRemaining?: string;
+  /** Full context per game (outlooks, model) for building picks on the server. */
+  assembled: AssembledGame[];
 }
 
 export interface AssembledGame {
@@ -78,6 +81,7 @@ export async function assembleGame(
     modelHomeMargin: model?.homeMargin,
     modelTotal: model?.expectedTotal,
   };
+  explainGameBets(game, away, home, model, seasonYearFor(g.startTime));
   return { game, away, home, model, oddsEventId: ev?.id, venueCity: g.venueCity ?? summary?.venueCity };
 }
 
@@ -104,7 +108,13 @@ export async function getTodaysGames(leagueId: LeagueId = "nba"): Promise<GamesR
     injuries: INJURY_SOURCE,
   };
   if (!board) {
-    return { day: null, games: [], sources, notices: ["Couldn't reach the schedule source. Try again in a few minutes."] };
+    return {
+      day: null,
+      games: [],
+      sources,
+      notices: ["Couldn't reach the schedule source. Try again in a few minutes."],
+      assembled: [],
+    };
   }
   const notices = oddsNotices(feed);
   if (!injuries) notices.push("Injury report unavailable right now — injury tags are hidden.");
@@ -116,6 +126,7 @@ export async function getTodaysGames(leagueId: LeagueId = "nba"): Promise<GamesR
     sources,
     notices,
     oddsCreditsRemaining: feed?.remaining,
+    assembled: games,
   };
 }
 

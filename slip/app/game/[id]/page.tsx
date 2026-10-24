@@ -11,6 +11,7 @@ import { Sheet } from "@/components/sheet";
 import { BetButton } from "@/components/slip/bet-button";
 import { Sparkline } from "@/components/sparkline";
 import { Tag } from "@/components/tag";
+import { WhyList } from "@/components/why-list";
 import { getGameDetail, restLabel, type GameDetail, type TeamDetail } from "@/lib/game-detail";
 import { formatAmerican, formatPct, formatPoint } from "@/lib/odds-math";
 import { legFromGameBet } from "@/lib/slip/legs";
@@ -60,10 +61,19 @@ function BetRow({ game, kind, title }: { game: Game; kind: "moneyline" | "spread
                 edge={bet?.edge}
               />
               {bet && (
-                <p className="mt-1 text-center text-[11px] tabular-nums text-muted">
-                  Book {formatPct(bet.impliedProb)}
-                  {bet.estProb !== undefined && <> · Est {formatPct(bet.estProb)}</>}
-                </p>
+                <Sheet
+                  id={`why-${kind}-${idx}`}
+                  title={bet.label}
+                  triggerClassName="mt-1 w-full text-center text-[11px] tabular-nums text-muted"
+                  trigger={
+                    <>
+                      Book {formatPct(bet.impliedProb)}
+                      {bet.estProb !== undefined && <> · Est {formatPct(bet.estProb)}</>} · <span className="underline">Why?</span>
+                    </>
+                  }
+                >
+                  <WhyList why={bet.why ?? []} />
+                </Sheet>
               )}
             </div>
           );

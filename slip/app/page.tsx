@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { GameCard } from "@/components/game-card";
-import { EdgeBanner } from "@/components/edge-banner";
-import { edgeBets, getTodaysGames } from "@/lib/games";
+import { Picks } from "@/components/picks";
+import { getTodaysGames } from "@/lib/games";
+import { getTodaysPicks } from "@/lib/picks";
 
 function formatDay(day: string) {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", {
@@ -15,7 +16,8 @@ function formatDay(day: string) {
 
 async function Games() {
   await connection();
-  const { day, games, notices, sources, oddsCreditsRemaining } = await getTodaysGames("nba");
+  const { day, games, notices, sources, oddsCreditsRemaining, assembled } = await getTodaysGames("nba");
+  const picks = await getTodaysPicks(assembled, "nba");
 
   return (
     <>
@@ -31,7 +33,7 @@ async function Games() {
         </ul>
       )}
 
-      <EdgeBanner edges={edgeBets(games)} anyUpcoming={games.some((g) => g.status.state === "pre")} />
+      <Picks picks={picks} anyUpcoming={games.some((g) => g.status.state === "pre")} />
 
       {games.length === 0 ? (
         <div className="rounded-2xl border border-line bg-card p-8 text-center">

@@ -137,6 +137,35 @@ export function statValue(g: PlayerGame, stat: PropStat): number {
   return stat === "pra" ? g.pts + g.reb + g.ast : g[stat];
 }
 
+export interface PropSample {
+  /** Games the model and hit rates use. */
+  games: PlayerGame[];
+  /** Games with the player's current team. */
+  withTeam: number;
+  /** Plain-English note when a trade changed the sample, else undefined. */
+  note?: string;
+}
+
+/**
+ * After a trade, old-team games describe a different role. Use only games with
+ * the current team once there are 5+; until then, fill in with older games and say so.
+ */
+export function propSample(games: PlayerGame[], teamId: string | undefined, teamAbbr?: string): PropSample {
+  if (!teamId) return { games, withTeam: games.length };
+  const mine = games.filter((g) => g.teamId === teamId);
+  if (mine.length === games.length) return { games, withTeam: mine.length };
+  const old = [...new Set(games.filter((g) => g.teamId !== teamId).map((g) => g.teamAbbr).filter(Boolean))].join("/");
+  const team = teamAbbr ?? "his current team";
+  if (mine.length >= 5) {
+    return { games: mine, withTeam: mine.length, note: `Only counting games with ${team}. Games with ${old} are left out.` };
+  }
+  return {
+    games,
+    withTeam: mine.length,
+    note: `Only ${mine.length} game${mine.length === 1 ? "" : "s"} with ${team} so far, so older games with ${old} are included. Trust these numbers less.`,
+  };
+}
+
 export interface PropModel {
   mean: number;
   sd: number;

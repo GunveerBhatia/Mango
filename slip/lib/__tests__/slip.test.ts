@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelProp, normCdf, normInv } from "../model";
+import { modelProp, normCdf, normInv, propSample } from "../model";
 import { impliedProbability } from "../odds-math";
 import {
   evByLeg,
@@ -117,7 +117,7 @@ describe("model", () => {
   });
   it("prop model needs 5 games and scales for dropping minutes", () => {
     const g = (pts: number, min: number) => ({
-      eventId: "", date: "", home: true, opponentId: "", opponentAbbr: "", min, pts, reb: 0, ast: 0, threes: 0,
+      eventId: "", date: "", teamId: "14", teamAbbr: "MIA", home: true, opponentId: "", opponentAbbr: "", min, pts, reb: 0, ast: 0, threes: 0,
     });
     expect(modelProp([g(20, 30)], "pts", 19.5)).toBeNull();
     const steady = modelProp(Array.from({ length: 10 }, () => g(20, 32)), "pts", 19.5)!;
@@ -125,5 +125,22 @@ describe("model", () => {
     const dropping = modelProp([...Array.from({ length: 7 }, () => g(20, 34)), g(20, 20), g(20, 20), g(20, 20)], "pts", 19.5)!;
     expect(dropping.minutesFactor).toBeLessThan(1);
     expect(dropping.overProb).toBeLessThan(steady.overProb);
+  });
+});
+
+describe("trades", () => {
+  const g = (teamId: string, teamAbbr: string) => ({
+    eventId: "", date: "", teamId, teamAbbr, home: true, opponentId: "30", opponentAbbr: "CHA", min: 30, pts: 20, reb: 0, ast: 0, threes: 0,
+  });
+  it("uses only current-team games once there are 5", () => {
+    const s = propSample([...Array.from({ length: 6 }, () => g("15", "MIL")), ...Array.from({ length: 5 }, () => g("14", "MIA"))], "14", "MIA");
+    expect(s.games).toHaveLength(5);
+    expect(s.note).toMatch(/MIL are left out/);
+  });
+  it("falls back to old-team games with a warning", () => {
+    const s = propSample([...Array.from({ length: 6 }, () => g("15", "MIL")), g("14", "MIA")], "14", "MIA");
+    expect(s.games).toHaveLength(7);
+    expect(s.withTeam).toBe(1);
+    expect(s.note).toMatch(/Only 1 game with MIA/);
   });
 });
